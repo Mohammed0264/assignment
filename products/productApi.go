@@ -82,24 +82,18 @@ func (p *ProductApi) UpdateImage(c *gin.Context) {
 		return
 	}
 	originalImage := c.PostForm("originalImage")
-	if originalImage != "Null1" {
-		_, err = os.Stat(originalImage)
-		if err == nil {
-			err = os.Remove(originalImage)
-			fmt.Println("image removed")
-			if err != nil {
-				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
-		}
-	}
-
-	image, err := c.FormFile("image")
-	fmt.Println("1")
+	err = removeOriginalImage(originalImage)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	image, err := c.FormFile("image")
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	supplierId := c.PostForm("supplierId")
 	imageName := image.Filename
 	extension := strings.ToLower(filepath.Ext(imageName))
 	valid := checkFileExtension(extension)
@@ -108,15 +102,14 @@ func (p *ProductApi) UpdateImage(c *gin.Context) {
 		return
 	}
 
-	file := filepath.Join("./images/", imageName)
+	file := filepath.Join("./images/supplier"+supplierId+"/", imageName)
 	counter := 0
-	fmt.Println("2")
 
 	for {
 		_, err = os.Stat(file)
 		if err == nil {
 
-			file = filepath.Join("./images/", strconv.Itoa(counter)+imageName)
+			file = filepath.Join("./images/supplier"+supplierId+"/", strconv.Itoa(counter)+imageName)
 			counter++
 			continue
 		} else {
@@ -125,7 +118,6 @@ func (p *ProductApi) UpdateImage(c *gin.Context) {
 	}
 
 	err, count := p.ProductService.UpdateImage(uint(id), file)
-	fmt.Println("3")
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err})
 		return
@@ -152,4 +144,16 @@ func checkFileExtension(extension string) bool {
 		}
 	}
 	return false
+}
+func removeOriginalImage(image string) error {
+	if image != "Null1" {
+		_, err := os.Stat(image)
+		if err == nil {
+			err = os.Remove(image)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
