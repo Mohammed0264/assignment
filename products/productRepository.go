@@ -18,7 +18,7 @@ func (p *ProductRepository) Create(product Product) error {
 }
 func (p *ProductRepository) Update(product Product) (error, int64) {
 	var count int64
-	result := p.Db.Model(&Product{}).Where("Id=?", &product.Id).Updates(&product).Count(&count)
+	result := p.Db.Model(&Product{}).Where("Id=?", &product.Id).Omit("ProductImage").Updates(&product).Count(&count)
 	return result.Error, count
 }
 func (p *ProductRepository) FindAll() []Product {
@@ -36,4 +36,10 @@ func (p *ProductRepository) FindByName(name string) []Product {
 func (p *ProductRepository) Delete(id uint) (error, int64) {
 	result := p.Db.Model(&Product{}).Where("id=?", &id).Delete(&Product{})
 	return result.Error, result.RowsAffected
+}
+func (p *ProductRepository) UpdateImage(id uint, image string) (error, int64) {
+	var count int64
+	result := p.Db.Model(&Product{}).Where("id=?", &id).Update("ProductImage", image).Count(&count)
+	return result.Error, count
+
 }

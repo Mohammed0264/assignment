@@ -9,6 +9,6 @@ type Product struct {
 	QuantityOnHand float64        `gorm:"column:quantity_on_hand"`
 	Price          float64        `gorm:"column:price"`
 	Supplier       uint           `gorm:"column:supplier"`
-	ProductImage   string         `gorm:"column:product_image"`
+	ProductImage   string         `gorm:"column:product_image; default:Null1"`
 	DeletedAt      gorm.DeletedAt `gorm:"column:deleted_at; index"`
 }

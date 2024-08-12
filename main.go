@@ -56,6 +56,7 @@ func main() {
 	route.GET("products", productApi.FindAll)
 	route.GET("product/:name", productApi.FindByName)
 	route.DELETE("product/delete", productApi.Delete)
+	route.PUT("/product/image", productApi.UpdateImage)
 
 	err := route.Run("localhost:8080")
 	if err != nil {

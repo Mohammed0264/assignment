@@ -37,3 +37,11 @@ func (p *ProductService) Delete(id uint) (error, int64) {
 		return nil, rowsAffected
 	}
 }
+func (p *ProductService) UpdateImage(id uint, image string) (error, int64) {
+	err, count := p.ProductRepository.UpdateImage(id, image)
+	if err != nil {
+		return err, 0
+	} else {
+		return nil, count
+	}
+}
