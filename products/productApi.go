@@ -48,6 +48,14 @@ func (p *ProductApi) Update(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// sanitize inputs to remove scripts because of xss and sql injection
+	productDto = sanitizeInput(productDto)
+	// check input validation
+	err = validateInput(productDto)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	er, count := p.ProductService.Update(ToProduct(productDto))
 	if er != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err})
@@ -64,6 +72,14 @@ func (p *ProductApi) FindAll(c *gin.Context) {
 }
 func (p *ProductApi) FindByName(c *gin.Context) {
 	name := c.Param("name")
+	var validator = validator2.New()
+	var sanitize = bluemonday.UGCPolicy()
+	err := validator.Var(name, "required")
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	name = sanitize.Sanitize(name)
 	products := p.ProductService.FindByName(name)
 	c.IndentedJSON(http.StatusOK, gin.H{"products": ToProductDTOs(products)})
 }
@@ -95,11 +111,7 @@ func (p *ProductApi) UpdateImage(c *gin.Context) {
 	}
 	originalImage := c.PostForm("originalImage")
 	sanitize.Sanitize(originalImage)
-	err = removeOriginalImage(originalImage)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+
 	err = validator.Var(originalImage, "required")
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})

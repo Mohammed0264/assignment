@@ -17,20 +17,12 @@ func ProvideProductService(p ProductRepository) ProductService {
 	return ProductService{ProductRepository: p}
 }
 func (p *ProductService) Create(product Product) error {
-	err := p.ProductRepository.Create(product)
-	if err != nil {
-		return err
-	} else {
-		return nil
-	}
+	return p.ProductRepository.Create(product)
+
 }
 func (p *ProductService) Update(product Product) (error, int64) {
-	err, count := p.ProductRepository.Update(product)
-	if err != nil {
-		return err, 0
-	} else {
-		return nil, count
-	}
+	return p.ProductRepository.Update(product)
+
 }
 func (p *ProductService) FindAll() []Product {
 	return p.ProductRepository.FindAll()
@@ -39,12 +31,7 @@ func (p *ProductService) FindByName(name string) []Product {
 	return p.ProductRepository.FindByName(name)
 }
 func (p *ProductService) Delete(id uint) (error, int64) {
-	err, rowsAffected := p.ProductRepository.Delete(id)
-	if err != nil {
-		return err, 0
-	} else {
-		return nil, rowsAffected
-	}
+	return p.ProductRepository.Delete(id)
 }
 func (p *ProductService) UpdateImage(id uint, image *multipart.FileHeader, originalImage string) (error, int64, string) {
 	imageName := image.Filename
@@ -73,6 +60,10 @@ func (p *ProductService) UpdateImage(id uint, image *multipart.FileHeader, origi
 	if err != nil {
 		return err, 0, ""
 	} else {
+		err = removeOriginalImage(originalImage)
+		if err != nil {
+			return err, 0, ""
+		}
 		return nil, count, file
 	}
 }
