@@ -3,11 +3,10 @@ package products
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	validator2 "github.com/go-playground/validator/v10"
+	"github.com/microcosm-cc/bluemonday"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
-	"strings"
 )
 
 type ProductApi struct {
@@ -18,12 +17,22 @@ func ProvideProductApi(p ProductService) ProductApi {
 	return ProductApi{ProductService: p}
 }
 func (p *ProductApi) Create(c *gin.Context) {
+
 	var productDto ProductDto
 	err := c.Bind(&productDto)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// sanitize inputs to remove scripts because of xss and sql injection
+	productDto = sanitizeInput(productDto)
+	// check input validation
+	err = validateInput(productDto)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	err = p.ProductService.Create(ToProduct(productDto))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err})
@@ -75,14 +84,23 @@ func (p *ProductApi) Delete(c *gin.Context) {
 	}
 	c.IndentedJSON(http.StatusOK, gin.H{"product": "product deleted with id: " + fmt.Sprint(productDto.Id)})
 }
+
 func (p *ProductApi) UpdateImage(c *gin.Context) {
+	var validator = validator2.New()
+	var sanitize = bluemonday.UGCPolicy()
 	id, err := strconv.Atoi(c.PostForm("id"))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	originalImage := c.PostForm("originalImage")
+	sanitize.Sanitize(originalImage)
 	err = removeOriginalImage(originalImage)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err = validator.Var(originalImage, "required")
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -93,33 +111,10 @@ func (p *ProductApi) UpdateImage(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	supplierId := c.PostForm("supplierId")
-	imageName := image.Filename
-	extension := strings.ToLower(filepath.Ext(imageName))
-	valid := checkFileExtension(extension)
-	if !valid {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid file extension"})
-		return
-	}
 
-	file := filepath.Join("./images/supplier"+supplierId+"/", imageName)
-	counter := 0
-
-	for {
-		_, err = os.Stat(file)
-		if err == nil {
-
-			file = filepath.Join("./images/supplier"+supplierId+"/", strconv.Itoa(counter)+imageName)
-			counter++
-			continue
-		} else {
-			break
-		}
-	}
-
-	err, count := p.ProductService.UpdateImage(uint(id), file)
+	err, count, file := p.ProductService.UpdateImage(uint(id), image, originalImage)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	if count == 0 {
@@ -136,24 +131,18 @@ func (p *ProductApi) UpdateImage(c *gin.Context) {
 
 }
 
-func checkFileExtension(extension string) bool {
-	validExtension := []string{".jpg", ".png", ".jpeg"}
-	for _, value := range validExtension {
-		if extension == value {
-			return true
-		}
-	}
-	return false
+func sanitizeInput(productDto ProductDto) ProductDto {
+	san := bluemonday.UGCPolicy()
+	productDto.Name = san.Sanitize(productDto.Name)
+	productDto.Barcode = san.Sanitize(productDto.Barcode)
+	productDto.ProductImage = san.Sanitize(productDto.ProductImage)
+	return productDto
 }
-func removeOriginalImage(image string) error {
-	if image != "Null1" {
-		_, err := os.Stat(image)
-		if err == nil {
-			err = os.Remove(image)
-			if err != nil {
-				return err
-			}
-		}
+func validateInput(productDto ProductDto) error {
+	var validator = validator2.New()
+	err := validator.Struct(productDto)
+	if err != nil {
+		return err
 	}
 	return nil
 }
