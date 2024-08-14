@@ -30,6 +30,10 @@ func (p *ProductService) FindAll() []Product {
 func (p *ProductService) FindByName(name string) []Product {
 	return p.ProductRepository.FindByName(name)
 }
+func (p *ProductService) FindById(id uint) Product {
+	return p.ProductRepository.FindById(id)
+}
+
 func (p *ProductService) Delete(id uint) (error, int64) {
 	return p.ProductRepository.Delete(id)
 }

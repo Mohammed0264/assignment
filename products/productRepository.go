@@ -1,7 +1,6 @@
 package products
 
 import (
-	"fmt"
 	"gorm.io/gorm"
 )
 
@@ -28,8 +27,6 @@ func (p *ProductRepository) FindAll() []Product {
 }
 func (p *ProductRepository) FindByName(name string) []Product {
 	var products []Product
-	fmt.Println(name)
-	fmt.Println("ff")
 	p.Db.Model(&Product{}).Where("Name LIKE ?", "%"+name+"%").Find(&products)
 	return products
 }
@@ -42,4 +39,9 @@ func (p *ProductRepository) UpdateImage(id uint, image string) (error, int64) {
 	result := p.Db.Model(&Product{}).Where("id=?", &id).Update("ProductImage", image).Count(&count)
 	return result.Error, count
 
+}
+func (p *ProductRepository) FindById(id uint) Product {
+	var product Product
+	p.Db.Model(&Product{}).Where("Id=?", &id).Find(&product)
+	return product
 }

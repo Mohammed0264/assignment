@@ -6,7 +6,7 @@ func ToInvoiceLine(invoiceLineDto InvoiceLineDto) InvoiceLine {
 }
 func ToInvoiceDto(invoiceLine InvoiceLine) InvoiceLineDto {
 	return InvoiceLineDto{Id: invoiceLine.Id, InvoiceId: invoiceLine.InvoiceId,
-		ItemId: invoiceLine.ItemId}
+		ItemId: invoiceLine.ItemId, Quantity: invoiceLine.Quantity, LinePrice: invoiceLine.LinePrice}
 }
 func ToInvoiceDTOs(invoiceLine []InvoiceLine) []InvoiceLineDto {
 	invoiceLineDTOs := make([]InvoiceLineDto, len(invoiceLine))

@@ -1,6 +1,7 @@
 package invoices
 
 import (
+	"fmt"
 	"github.com/gin-gonic/gin"
 	validator2 "github.com/go-playground/validator/v10"
 	"github.com/microcosm-cc/bluemonday"
@@ -15,36 +16,42 @@ func ProvideInvoiceApi(p InvoiceService) InvoiceApi {
 	return InvoiceApi{InvoiceService: p}
 }
 func (p *InvoiceApi) Create(c *gin.Context) {
-	var invoiceDto InvoiceDto
-	err := c.Bind(&invoiceDto)
+	var invoiceReceiver InvoiceReceiver
+	err := c.Bind(&invoiceReceiver)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	err = inputValidation(invoiceDto)
+	err = inputValidation(invoiceReceiver)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	invoiceDto = inputSanitization(invoiceDto)
-	err = p.InvoiceService.Create(ToInvoice(invoiceDto))
+	invoiceReceiver = inputSanitization(invoiceReceiver)
+	fmt.Println(invoiceReceiver)
+	err = p.InvoiceService.Create(ToInvoice(invoiceReceiver), invoiceReceiver.InvoiceLine)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"invoice": invoiceDto})
+	c.JSON(http.StatusOK, gin.H{"invoice": "created"})
+}
+func (p *InvoiceApi) FindAll(c *gin.Context) {
+	invoices := p.InvoiceService.FindAll()
+	c.IndentedJSON(http.StatusOK, gin.H{"invoices": invoices})
 }
 
-func inputValidation(invoiceDto InvoiceDto) error {
+func inputValidation(invoiceReceiver InvoiceReceiver) error {
 	var validator = validator2.New()
-	err := validator.Struct(invoiceDto)
+	err := validator.Struct(invoiceReceiver)
 	if err != nil {
 		return err
 	}
 	return nil
 }
-func inputSanitization(invoiceDto InvoiceDto) InvoiceDto {
+func inputSanitization(invoiceReceiver InvoiceReceiver) InvoiceReceiver {
 	var sanitize = bluemonday.UGCPolicy()
-	invoiceDto.InvoiceUniqueId = sanitize.Sanitize(invoiceDto.InvoiceUniqueId)
-	return invoiceDto
+	invoiceReceiver.InvoiceUniqueId = sanitize.Sanitize(invoiceReceiver.InvoiceUniqueId)
+
+	return invoiceReceiver
 }
