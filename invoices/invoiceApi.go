@@ -40,7 +40,39 @@ func (p *InvoiceApi) FindAll(c *gin.Context) {
 	invoices := p.InvoiceService.FindAll()
 	c.IndentedJSON(http.StatusOK, gin.H{"invoices": invoices})
 }
+func (p *InvoiceApi) Update(c *gin.Context) {
+	var updateInvoice InvoiceUpdate
+	err := c.Bind(&updateInvoice)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err, count := p.InvoiceService.Update(updateInvoice)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"invoice": count})
+}
+func (p *InvoiceApi) Delete(c *gin.Context) {
+	var invoiceDto InvoiceDto
+	err := c.Bind(&invoiceDto)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err, count := p.InvoiceService.Delete(invoiceDto.Id)
+	if err != nil {
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if count == 0 {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"error": "can not delete invoice"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, gin.H{"invoice": "invoice deleted"})
 
+}
 func inputValidation(invoiceReceiver InvoiceReceiver) error {
 	var validator = validator2.New()
 	err := validator.Struct(invoiceReceiver)

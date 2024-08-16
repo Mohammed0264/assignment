@@ -27,3 +27,8 @@ func (p *InvoiceLineRepository) FindByInvoiceId(id uint) []InvoiceLine {
 	p.Db.Model(&InvoiceLine{}).Where("InvoiceId=?", id).Find(&invoiceLines)
 	return invoiceLines
 }
+func (p *InvoiceLineRepository) Delete(id uint) (error, int64) {
+
+	result := p.Db.Model(&InvoiceLine{}).Delete(&InvoiceLine{}, id)
+	return result.Error, result.RowsAffected
+}

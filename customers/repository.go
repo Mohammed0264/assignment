@@ -1,7 +1,6 @@
 package customers
 
 import (
-	"fmt"
 	"gorm.io/gorm"
 )
 
@@ -41,9 +40,7 @@ func (p *CustomerRepository) Delete(id uint) (error, int) {
 func (p *CustomerRepository) Find(id uint) (Customer, error, int64) {
 	var foundCustomer Customer
 	var count int64
-	fmt.Println("customer:" + fmt.Sprint(id))
 	result := p.Db.Model(&Customer{}).Where("id = ?", &id).Find(&foundCustomer).Count(&count)
-	fmt.Println("customer fetched")
 	if result.Error != nil {
 		return Customer{}, result.Error, 0
 	}

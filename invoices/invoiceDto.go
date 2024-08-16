@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-var time1 time.Time
-
 type InvoiceDto struct {
 	Id              uint      `json:"id"`
 	InvoiceUniqueId string    `json:"uniqueInvoiceId"`
@@ -31,4 +29,14 @@ type InvoiceSender struct {
 	InvoiceDate     time.Time                     `json:"invoiceDate"`
 	InvoiceTotal    float64                       `json:"invoiceTotal"`
 	InvoiceLineDto  []invoiceLines.InvoiceLineDto `json:"invoiceLine"`
+}
+type InvoiceUpdate struct {
+	Id                uint                          `json:"id"`
+	InvoiceUniqueId   string                        `json:"uniqueInvoiceId"`
+	OriginalCustomer  uint                          `json:"customer"`
+	UpdateCustomer    uint                          `json:"update_customer"`
+	InvoiceDate       time.Time                     `json:"invoiceDate"`
+	InvoiceTotal      float64                       `json:"invoiceTotal"`
+	UpdateInvoiceLine []invoiceLines.InvoiceLineDto `json:"invoiceLineUpdate"`
+	InvoiceLineDto    []invoiceLines.InvoiceLineDto `json:"invoiceLine"`
 }

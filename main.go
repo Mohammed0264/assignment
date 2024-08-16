@@ -68,7 +68,9 @@ func main() {
 	invoiceLines1 := invoiceLines.InitInvoiceLineService(db)
 	invoices.InitInvoiceLineServiceReceiver = invoiceLines1
 	route.POST("invoice/create", invoiceApi.Create)
+	route.PUT("invoice/update", invoiceApi.Update)
 	route.GET("invoices", invoiceApi.FindAll)
+	route.DELETE("invoice/delete", invoiceApi.Delete)
 	err := route.Run("localhost:8080")
 	if err != nil {
 		fmt.Println(err.Error())

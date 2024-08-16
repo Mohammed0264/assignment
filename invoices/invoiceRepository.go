@@ -39,13 +39,18 @@ func (p *InvoiceRepository) FindAll() []Invoice {
 	fmt.Println(invoices)
 	return invoices
 }
-func (p *InvoiceRepository) FindById(invoiceUniqueId string) (Invoice, error) {
+func (p *InvoiceRepository) FindByInvoiceUniqueId(invoiceUniqueId string) (Invoice, error) {
 	var invoices Invoice
 	result := p.Db.Model(&Invoice{}).Where("invoice_unique_id=?", &invoiceUniqueId).Find(&invoices)
 	return invoices, result.Error
 }
-func (p *InvoiceRepository) Delete(invoiceUniqueId string) (error, int64) {
-	result := p.Db.Model(&Invoice{}).Where("invoice_unique_id=?", &invoiceUniqueId).Delete(&Invoice{})
+func (p *InvoiceRepository) FindById(id uint) (Invoice, error) {
+	var invoices Invoice
+	result := p.Db.Model(&Invoice{}).Where("Id=?", &id).Find(&invoices)
+	return invoices, result.Error
+}
+func (p *InvoiceRepository) Delete(id uint) (error, int64) {
+	result := p.Db.Model(&Invoice{}).Where("Id=?", &id).Delete(&Invoice{})
 	return result.Error, result.RowsAffected
 }
 func (p *InvoiceRepository) FindLastInvoice() Invoice {

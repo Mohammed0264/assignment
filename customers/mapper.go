@@ -6,7 +6,7 @@ func ToCustomer(customerDto CustomerDto) Customer {
 }
 func ToCustomerDTO(customer Customer) CustomerDto {
 	return CustomerDto{Id: customer.Id, FirstName: customer.FirstName, LastName: customer.LastName,
-		Address: customer.Address, Balance: customer.Balance}
+		Address: customer.Address, Balance: customer.Balance, Phone: customer.Phone}
 }
 func ToCustomerDTOs(customers []Customer) []CustomerDto {
 	customerDTOs := make([]CustomerDto, len(customers))
