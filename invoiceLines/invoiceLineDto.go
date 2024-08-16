@@ -2,9 +2,9 @@ package invoiceLines
 
 type InvoiceLineDto struct {
 	Id        uint    `json:"id"`
-	InvoiceId uint    `json:"invoiceId"`
+	InvoiceId uint    `json:"invoiceId" validate:"required"`
 	ItemName  string  `json:"itemName"`
-	ItemId    uint    `json:"item_id"`
-	Quantity  float64 `json:"quantity"`
-	LinePrice float64 `json:"line_price"`
+	ItemId    uint    `json:"item_id" validate:"required"`
+	Quantity  float64 `json:"quantity" validate:"required"`
+	LinePrice float64 `json:"line_price" validate:"required"`
 }

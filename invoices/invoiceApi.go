@@ -19,22 +19,22 @@ func (p *InvoiceApi) Create(c *gin.Context) {
 	var invoiceReceiver InvoiceReceiver
 	err := c.Bind(&invoiceReceiver)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	err = inputValidation(invoiceReceiver)
+	invoiceReceiver = inputSanitizationForCreate(invoiceReceiver)
+	err = inputValidationForCreate(invoiceReceiver)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	invoiceReceiver = inputSanitization(invoiceReceiver)
 	fmt.Println(invoiceReceiver)
 	err = p.InvoiceService.Create(ToInvoice(invoiceReceiver), invoiceReceiver.InvoiceLine)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"invoice": "created"})
+	c.IndentedJSON(http.StatusOK, gin.H{"invoice": "created"})
 }
 func (p *InvoiceApi) FindAll(c *gin.Context) {
 	invoices := p.InvoiceService.FindAll()
@@ -43,22 +43,30 @@ func (p *InvoiceApi) FindAll(c *gin.Context) {
 func (p *InvoiceApi) Update(c *gin.Context) {
 	var updateInvoice InvoiceUpdate
 	err := c.Bind(&updateInvoice)
+
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	updateInvoice = inputSanitizationForUpdate(updateInvoice)
+
+	err = inputValidationForUpdate(updateInvoice)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	err, count := p.InvoiceService.Update(updateInvoice)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"invoice": count})
+	c.AbortWithStatusJSON(http.StatusOK, gin.H{"invoice": count})
 }
 func (p *InvoiceApi) Delete(c *gin.Context) {
 	var invoiceDto InvoiceDto
 	err := c.Bind(&invoiceDto)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	err, count := p.InvoiceService.Delete(invoiceDto.Id)
@@ -73,17 +81,38 @@ func (p *InvoiceApi) Delete(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, gin.H{"invoice": "invoice deleted"})
 
 }
-func inputValidation(invoiceReceiver InvoiceReceiver) error {
+func inputValidationForCreate(invoiceReceiver InvoiceReceiver) error {
 	var validator = validator2.New()
-	err := validator.Struct(invoiceReceiver)
+	err := validator.Struct(&invoiceReceiver)
 	if err != nil {
 		return err
 	}
 	return nil
 }
-func inputSanitization(invoiceReceiver InvoiceReceiver) InvoiceReceiver {
+func inputValidationForUpdate(invoiceUpdate InvoiceUpdate) error {
+	var validator = validator2.New()
+	err := validator.Struct(&invoiceUpdate)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func inputSanitizationForCreate(invoiceReceiver InvoiceReceiver) InvoiceReceiver {
 	var sanitize = bluemonday.UGCPolicy()
 	invoiceReceiver.InvoiceUniqueId = sanitize.Sanitize(invoiceReceiver.InvoiceUniqueId)
-
+	for index, _ := range invoiceReceiver.InvoiceLine {
+		invoiceReceiver.InvoiceLine[index].ItemName = sanitize.Sanitize(invoiceReceiver.InvoiceLine[index].ItemName)
+	}
 	return invoiceReceiver
+}
+func inputSanitizationForUpdate(invoiceUpdate InvoiceUpdate) InvoiceUpdate {
+	var sanitize = bluemonday.UGCPolicy()
+	invoiceUpdate.InvoiceUniqueId = sanitize.Sanitize(invoiceUpdate.InvoiceUniqueId)
+	for index, _ := range invoiceUpdate.InvoiceLineDto {
+		invoiceUpdate.InvoiceLineDto[index].ItemName = sanitize.Sanitize(invoiceUpdate.InvoiceLineDto[index].ItemName)
+	}
+	for index, _ := range invoiceUpdate.UpdateInvoiceLine {
+		invoiceUpdate.UpdateInvoiceLine[index].ItemName = sanitize.Sanitize(invoiceUpdate.UpdateInvoiceLine[index].ItemName)
+	}
+	return invoiceUpdate
 }

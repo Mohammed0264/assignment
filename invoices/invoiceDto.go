@@ -16,7 +16,7 @@ type InvoiceDto struct {
 type InvoiceReceiver struct {
 	Id              uint                          `json:"id"`
 	InvoiceUniqueId string                        `json:"uniqueInvoiceId"`
-	Customer        uint                          `json:"customer"`
+	Customer        uint                          `json:"customer" validate:"required"`
 	InvoiceDate     time.Time                     `json:"invoiceDate"`
 	InvoiceTotal    float64                       `json:"invoiceTotal"`
 	InvoiceLine     []invoiceLines.InvoiceLineDto `json:"line"`
@@ -31,11 +31,11 @@ type InvoiceSender struct {
 	InvoiceLineDto  []invoiceLines.InvoiceLineDto `json:"invoiceLine"`
 }
 type InvoiceUpdate struct {
-	Id                uint                          `json:"id"`
-	InvoiceUniqueId   string                        `json:"uniqueInvoiceId"`
-	OriginalCustomer  uint                          `json:"customer"`
-	UpdateCustomer    uint                          `json:"update_customer"`
-	InvoiceDate       time.Time                     `json:"invoiceDate"`
+	Id                uint                          `json:"id" validate:"required"`
+	InvoiceUniqueId   string                        `json:"uniqueInvoiceId" validate:"required"`
+	OriginalCustomer  uint                          `json:"customer" validate:"required"`
+	UpdateCustomer    uint                          `json:"update_customer" validate:"required"`
+	InvoiceDate       time.Time                     `json:"invoiceDate" validate:"required"`
 	InvoiceTotal      float64                       `json:"invoiceTotal"`
 	UpdateInvoiceLine []invoiceLines.InvoiceLineDto `json:"invoiceLineUpdate"`
 	InvoiceLineDto    []invoiceLines.InvoiceLineDto `json:"invoiceLine"`
