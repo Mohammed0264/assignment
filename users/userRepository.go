@@ -14,17 +14,17 @@ func (p *UserRepository) Create(user User) error {
 }
 func (p *UserRepository) UpdateUserName(user User) (error, int64) {
 	var count int64
-	result := p.Db.Model(&User{}).Where("Id=?", &user.Id).Update("UserName", user.UserName).Count(&count)
+	result := p.Db.Model(&User{}).Where("Id=?", &user.Id).Update("user_name", user.UserName).Count(&count)
 	return result.Error, count
 }
 func (p *UserRepository) UpdatePassword(user User) (error, int64) {
 	var count int64
-	result := p.Db.Model(&User{}).Where("Id=?", &user.Id).Update("Password", user.Password).Count(&count)
+	result := p.Db.Model(&User{}).Where("Id=?", &user.Id).Update("password", user.Password).Count(&count)
 	return result.Error, count
 }
 func (p *UserRepository) FindByUserName(userName string) []User {
 	var users []User
-	p.Db.Model(&User{}).Where("UserName=?", &userName).Find(&users)
+	p.Db.Model(&User{}).Where("user_name LIKE ?", "%"+userName+"%").Find(&users)
 	return users
 }
 func (p *UserRepository) FindAll() []User {

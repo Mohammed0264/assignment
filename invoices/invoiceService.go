@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -17,8 +18,6 @@ var InitProductApiReceiver products.ProductApi
 var InitCustomerApiReceiver customers.CustomerApi
 var InitInvoiceLineServiceReceiver invoiceLines.InvoiceLineService
 var updateCustomerId uint
-var saveMoney float64
-var loseMoney float64
 var totalPriceUpdated float64
 
 type InvoiceService struct {
@@ -29,6 +28,15 @@ func ProvideInvoiceService(p InvoiceRepository) InvoiceService {
 	return InvoiceService{InvoiceRepository: p}
 }
 func (p *InvoiceService) Create(invoice Invoice, invoiceLineDto []invoiceLines.InvoiceLineDto) error {
+	tax, err := strconv.ParseFloat(os.Getenv("TAX_RATE"), 64)
+	if err != nil {
+		return err
+	}
+	addTax := 1 + tax/100
+	threshold, err := strconv.ParseFloat(os.Getenv("TAX_THRESHOLD"), 64)
+	if err != nil {
+		return err
+	}
 	customerService := InitCustomerApiReceiver.CustomerService
 
 	customer, err, count := customerService.GetCustomerById(invoice.Customer)
@@ -48,6 +56,10 @@ func (p *InvoiceService) Create(invoice Invoice, invoiceLineDto []invoiceLines.I
 		}
 		invoiceLineDto[index].LinePrice = product[index].Price
 		totalPrice = totalPrice + (product[index].Price * invoiceLineDto[index].Quantity)
+	}
+	if totalPrice > threshold {
+		totalPrice = totalPrice * addTax
+		totalPriceUpdated = math.Round(totalPriceUpdated*100) / 100
 	}
 	if customer.Balance-totalPrice < 0 {
 		return errors.New(customer.FirstName + " " + customer.LastName + " does not have enough balance")
@@ -88,6 +100,8 @@ func (p *InvoiceService) Create(invoice Invoice, invoiceLineDto []invoiceLines.I
 
 	}
 	invoice.InvoiceUniqueId = newId
+	fmt.Println("last")
+	fmt.Println(totalPriceUpdated)
 	invoice.InvoiceTotal = totalPrice
 	err, lastInvoice := p.InvoiceRepository.Create(invoice)
 	if err != nil {
@@ -179,6 +193,9 @@ func (p *InvoiceService) Delete(invoiceId uint) (error, int64) {
 	if err != nil {
 		return errors.New("could not find invoice"), 0
 	}
+	if invoice.Id == 0 {
+		return errors.New("could not find invoice"), 0
+	}
 	customerId := invoice.Customer
 	counter := 1
 	for index, _ := range invoiceLinesReceived {
@@ -191,13 +208,6 @@ func (p *InvoiceService) Delete(invoiceId uint) (error, int64) {
 		if count == 0 {
 			return errors.New("error on " + fmt.Sprint(counter) + " try of update Product"), 0
 		}
-		err, count = customer.AddBalance(customerId, invoiceLinesReceived[index].Quantity*invoiceLinesReceived[index].LinePrice)
-		if err != nil {
-			return err, 0
-		}
-		if count == 0 {
-			return errors.New("error on " + fmt.Sprint(counter) + " try of add balance"), 0
-		}
 		err, count = invoiceLine.Delete(invoiceLinesReceived[index].Id)
 		if err != nil {
 			return err, 0
@@ -209,18 +219,31 @@ func (p *InvoiceService) Delete(invoiceId uint) (error, int64) {
 
 		counter++
 	}
-	err, count := p.InvoiceRepository.Delete(invoiceId)
+	err, count := customer.AddBalance(customerId, invoice.InvoiceTotal)
+	if err != nil {
+		return err, 0
+	}
+	if count == 0 {
+		return errors.New("error on " + fmt.Sprint(counter) + " try of add balance"), 0
+	}
+	err, count = p.InvoiceRepository.Delete(invoiceId)
 	if err != nil {
 		return err, 0
 	}
 	return nil, count
 }
 
-// check update and delete invoice
 func (p *InvoiceService) updateAndDeleteInvoice(invoiceUpdate InvoiceUpdate) (error, int64) {
+	tax, err := strconv.ParseFloat(os.Getenv("TAX_RATE"), 64)
+	if err != nil {
+		return err, 0
+	}
+	addTax := 1 + tax/100
+	threshold, err := strconv.ParseFloat(os.Getenv("TAX_THRESHOLD"), 64)
+	if err != nil {
+		return err, 0
+	}
 	updateCustomerId = 0
-	saveMoney = 0
-	loseMoney = 0
 	totalPriceUpdated = 0
 	customerService := InitCustomerApiReceiver.CustomerService
 	invoiceLineService := InitInvoiceLineServiceReceiver
@@ -238,6 +261,10 @@ func (p *InvoiceService) updateAndDeleteInvoice(invoiceUpdate InvoiceUpdate) (er
 		item := productService.FindById(invoiceUpdate.UpdateInvoiceLine[index].ItemId)
 		totalPriceUpdated += item.Price * invoiceUpdate.UpdateInvoiceLine[index].Quantity
 	}
+	if totalPriceUpdated >= threshold {
+		totalPriceUpdated = totalPriceUpdated * addTax
+		totalPriceUpdated = math.Round(totalPriceUpdated*100) / 100
+	}
 	// check for customer update
 	if invoiceUpdate.UpdateCustomer != invoiceUpdate.OriginalCustomer {
 		customer, err, count := customerService.GetCustomerById(invoiceUpdate.UpdateCustomer)
@@ -251,9 +278,6 @@ func (p *InvoiceService) updateAndDeleteInvoice(invoiceUpdate InvoiceUpdate) (er
 
 		if customer.Balance-totalPriceUpdated < 0 {
 			return errors.New("updated customer has not enough balance"), 0
-		} else {
-			loseMoney = totalPriceUpdated
-			loseMoney = math.Abs(loseMoney)
 		}
 	} else {
 		updateCustomerId = invoiceUpdate.OriginalCustomer
@@ -266,63 +290,65 @@ func (p *InvoiceService) updateAndDeleteInvoice(invoiceUpdate InvoiceUpdate) (er
 		if count == 0 {
 			return errors.New("could not find data for old customer"), 0
 		}
-		if customerBalance+invoiceUpdate.InvoiceTotal-totalPriceUpdated < 0 {
-			return errors.New("customer did not have enough money"), 0
+		if customerBalance-totalPriceUpdated < 0 {
+			return errors.New("customer has not have enough money"), 0
 		}
-		if invoiceUpdate.InvoiceTotal-totalPriceUpdated >= 0 {
-			saveMoney = invoiceUpdate.InvoiceTotal - totalPriceUpdated
 
-		} else {
-			loseMoney = invoiceUpdate.InvoiceTotal - totalPriceUpdated
-			loseMoney = math.Abs(loseMoney)
-		}
 	}
 
 	notifier := 0
 	counter := 0
 	// check for delete invoiceLines and create
 	if len(invoiceUpdate.UpdateInvoiceLine) < len(invoiceUpdate.InvoiceLineDto) {
-		fmt.Println("here")
 		var resizeInvoiceLineDto []invoiceLines.InvoiceLineDto
+		// check for create
+		for i := 0; i < len(invoiceUpdate.UpdateInvoiceLine); i++ {
+			fmt.Println("insdie loop of create")
+			if invoiceUpdate.UpdateInvoiceLine[i].Id == 0 {
+				fmt.Println("inside create")
+				err := invoiceLineService.Create(invoiceUpdate.UpdateInvoiceLine[i])
+				if err != nil {
+					return errors.New("can not create new invoiceLine1"), 0
 
+				}
+				product := productService.FindById(invoiceUpdate.UpdateInvoiceLine[i].ItemId)
+				product.QuantityOnHand = product.QuantityOnHand - invoiceUpdate.UpdateInvoiceLine[i].Quantity
+				err, count := productService.Update(product)
+				if err != nil {
+					return err, 0
+				}
+				if count == 0 {
+					return errors.New("could not update product1"), 0
+				}
+
+				//	break
+
+			}
+		}
+
+		// check for update and delete
 		for b := 0; b < len(invoiceUpdate.InvoiceLineDto); b++ {
 			for i := 0; i < len(invoiceUpdate.UpdateInvoiceLine); i++ {
-				if invoiceUpdate.InvoiceLineDto[b].Id == 0 {
-					err := invoiceLineService.Create(invoiceUpdate.UpdateInvoiceLine[b])
-					if err != nil {
-						return errors.New("can not create new invoiceLine"), 0
 
-					}
-					product := productService.FindById(invoiceUpdate.UpdateInvoiceLine[b].ItemId)
-					product.QuantityOnHand = product.QuantityOnHand - invoiceUpdate.UpdateInvoiceLine[b].Quantity
-					err, count := productService.Update(product)
-					if err != nil {
-						return err, 0
-					}
-					if count == 0 {
-						return errors.New("could not update product"), 0
-					}
-
-					//	break
-				} else if invoiceUpdate.InvoiceLineDto[b].Id == invoiceUpdate.UpdateInvoiceLine[i].Id {
+				if invoiceUpdate.InvoiceLineDto[b].Id == invoiceUpdate.UpdateInvoiceLine[i].Id {
 					notifier = 1
 					break
 				}
 				notifier = 2
 			}
-			fmt.Println(invoiceUpdate.InvoiceLineDto[b].Id)
-			fmt.Println(notifier)
+
 			if notifier == 1 {
 				resizeInvoiceLineDto = append(resizeInvoiceLineDto, invoiceUpdate.InvoiceLineDto[b])
 				notifier = 0
 				counter++
 			} else if notifier == 2 {
+				fmt.Println(invoiceUpdate.InvoiceLineDto[b].Id)
 				err, count := invoiceLineService.Delete(invoiceUpdate.InvoiceLineDto[b].Id)
 				if err != nil {
 					return err, 0
 				}
 				if count == 0 {
-					return errors.New("could not delete invoiceLine"), 0
+					return errors.New("could not delete invoiceLine1"), 0
 				}
 				product := productService.FindById(invoiceUpdate.InvoiceLineDto[b].ItemId)
 				product.QuantityOnHand = product.QuantityOnHand + invoiceUpdate.InvoiceLineDto[b].Quantity
@@ -331,9 +357,10 @@ func (p *InvoiceService) updateAndDeleteInvoice(invoiceUpdate InvoiceUpdate) (er
 					return err, 0
 				}
 				if count == 0 {
-					return errors.New("could not update product1"), 0
+					return errors.New("could not update product2"), 0
 				}
 			}
+
 		}
 
 		// check for updates
@@ -351,7 +378,7 @@ func (p *InvoiceService) updateAndDeleteInvoice(invoiceUpdate InvoiceUpdate) (er
 								return err, 0
 							}
 							if count == 0 {
-								return errors.New("could not update product"), 0
+								return errors.New("could not update product3"), 0
 							}
 						} else {
 							product.QuantityOnHand -= invoiceUpdate.UpdateInvoiceLine[i].Quantity - invoiceUpdate.InvoiceLineDto[i].Quantity
@@ -360,7 +387,7 @@ func (p *InvoiceService) updateAndDeleteInvoice(invoiceUpdate InvoiceUpdate) (er
 								return err, 0
 							}
 							if count == 0 {
-								return errors.New("could not update product"), 0
+								return errors.New("could not update product4"), 0
 							}
 						}
 					}
@@ -373,7 +400,7 @@ func (p *InvoiceService) updateAndDeleteInvoice(invoiceUpdate InvoiceUpdate) (er
 						return err, 0
 					}
 					if count == 0 {
-						return errors.New("could not update item"), 0
+						return errors.New("1could not update item"), 0
 					}
 					product1 := productService.FindById(invoiceUpdate.UpdateInvoiceLine[i].ItemId)
 					quantityOnHand := product1.QuantityOnHand - invoiceUpdate.UpdateInvoiceLine[i].Quantity
@@ -384,7 +411,7 @@ func (p *InvoiceService) updateAndDeleteInvoice(invoiceUpdate InvoiceUpdate) (er
 						return err, 0
 					}
 					if count == 0 {
-						return errors.New("could not update item1"), 0
+						return errors.New("2could not update item"), 0
 					}
 				}
 				err, count := invoiceLineService.Update(invoiceUpdate.UpdateInvoiceLine[i])
@@ -392,7 +419,7 @@ func (p *InvoiceService) updateAndDeleteInvoice(invoiceUpdate InvoiceUpdate) (er
 					return err, 0
 				}
 				if count == 0 {
-					return errors.New("could not update invoiceLine"), 0
+					return errors.New("could not update invoiceLine1"), 0
 				}
 			}
 		}
@@ -402,21 +429,43 @@ func (p *InvoiceService) updateAndDeleteInvoice(invoiceUpdate InvoiceUpdate) (er
 			return err, 0
 		}
 		if count == 0 {
-			return errors.New("could not update invoice"), 0
+			return errors.New("could not update invoice1"), 0
 		}
 		if updateCustomerId == invoiceUpdate.OriginalCustomer {
-			if saveMoney > 0 {
-				err, count = customerService.AddBalance(invoiceUpdate.OriginalCustomer, saveMoney)
-				return err, count
-			} else if loseMoney > 0 {
-				err, count = customerService.SubtractBalance(invoiceUpdate.OriginalCustomer, loseMoney)
-				return err, count
-			}
-		} else {
-			err, count = customerService.SubtractBalance(invoiceUpdate.UpdateCustomer, loseMoney)
 
 			err, count = customerService.AddBalance(invoiceUpdate.OriginalCustomer, invoiceUpdate.InvoiceTotal)
-			return err, count
+			if err != nil {
+				return err, 0
+			}
+			if count == 0 {
+				return errors.New("could not return back money to customer"), 0
+			}
+			err, count = customerService.SubtractBalance(invoiceUpdate.OriginalCustomer, totalPriceUpdated)
+
+			if err != nil {
+				return err, 0
+			}
+			if count == 0 {
+				return errors.New("could not subtract money from customer please notify admin"), 0
+			}
+
+		} else {
+			err, count = customerService.SubtractBalance(invoiceUpdate.UpdateCustomer, totalPriceUpdated)
+
+			if err != nil {
+				return err, 0
+			}
+			if count == 0 {
+				return errors.New("could not return money for previous customer please notify admin"), 0
+			}
+			err, count = customerService.AddBalance(invoiceUpdate.OriginalCustomer, invoiceUpdate.InvoiceTotal)
+
+			if err != nil {
+				return err, 0
+			}
+			if count == 0 {
+				return errors.New("could not subtract money from new customer please notify admin"), 0
+			}
 
 		}
 		return nil, 1
@@ -427,9 +476,16 @@ func (p *InvoiceService) updateAndDeleteInvoice(invoiceUpdate InvoiceUpdate) (er
 
 // check update and create invoiceLine
 func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (error, int64) {
+	tax, err := strconv.ParseFloat(os.Getenv("TAX_RATE"), 64)
+	if err != nil {
+		return err, 0
+	}
+	addTax := 1 + tax/100
+	threshold, err := strconv.ParseFloat(os.Getenv("TAX_THRESHOLD"), 64)
+	if err != nil {
+		return err, 0
+	}
 	updateCustomerId = 0
-	saveMoney = 0
-	loseMoney = 0
 	totalPriceUpdated = 0
 	customerService := InitCustomerApiReceiver.CustomerService
 	invoiceLineService := InitInvoiceLineServiceReceiver
@@ -447,6 +503,10 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 		item := productService.FindById(invoiceUpdate.UpdateInvoiceLine[index].ItemId)
 		totalPriceUpdated += item.Price * invoiceUpdate.UpdateInvoiceLine[index].Quantity
 	}
+	if totalPriceUpdated > threshold {
+		totalPriceUpdated = totalPriceUpdated * addTax
+		totalPriceUpdated = math.Round(totalPriceUpdated*100) / 100
+	}
 	// check for customer update
 	if invoiceUpdate.UpdateCustomer != invoiceUpdate.OriginalCustomer {
 		customer, err, count := customerService.GetCustomerById(invoiceUpdate.UpdateCustomer)
@@ -460,30 +520,20 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 
 		if customer.Balance-totalPriceUpdated < 0 {
 			return errors.New("updated customer has not enough balance"), 0
-		} else {
-			loseMoney = totalPriceUpdated
-			loseMoney = math.Abs(loseMoney)
 		}
 	} else {
 		updateCustomerId = invoiceUpdate.OriginalCustomer
 
 		customer, err, count := customerService.GetCustomerById(invoiceUpdate.OriginalCustomer)
-		customerBalance := invoiceUpdate.InvoiceTotal + customer.Balance
+		customerBalance := customer.Balance + invoiceUpdate.InvoiceTotal
 		if err != nil {
 			return err, 0
 		}
 		if count == 0 {
 			return errors.New("could not find data for old customer"), 0
 		}
-		if customerBalance+invoiceUpdate.InvoiceTotal-totalPriceUpdated < 0 {
+		if customerBalance-totalPriceUpdated < 0 {
 			return errors.New("customer did not have enough money"), 0
-		}
-		if invoiceUpdate.InvoiceTotal-totalPriceUpdated >= 0 {
-			saveMoney = invoiceUpdate.InvoiceTotal - totalPriceUpdated
-
-		} else {
-			loseMoney = invoiceUpdate.InvoiceTotal - totalPriceUpdated
-			loseMoney = math.Abs(loseMoney)
 		}
 	}
 
@@ -495,7 +545,7 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 			if invoiceUpdate.UpdateInvoiceLine[b].Id == 0 {
 				err := invoiceLineService.Create(invoiceUpdate.UpdateInvoiceLine[b])
 				if err != nil {
-					return errors.New("can not create new invoiceLine"), 0
+					return errors.New("can not create new invoiceLine2"), 0
 
 				}
 				product := productService.FindById(invoiceUpdate.UpdateInvoiceLine[b].ItemId)
@@ -505,7 +555,7 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 					return err, 0
 				}
 				if count == 0 {
-					return errors.New("could not update product"), 0
+					return errors.New("could not update product5"), 0
 				}
 
 			} else {
@@ -521,14 +571,14 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 										return err, 0
 									}
 									if count == 0 {
-										return errors.New("could not update product1"), 0
+										return errors.New("could not update product6"), 0
 									}
 									err, count = invoiceLineService.Update(invoiceUpdate.UpdateInvoiceLine[b])
 									if err != nil {
 										return err, 0
 									}
 									if count == 0 {
-										return errors.New("could not update invoiceLine"), 0
+										return errors.New("could not update invoiceLine2"), 0
 									}
 								}
 								if invoiceUpdate.UpdateInvoiceLine[b].Quantity < invoiceUpdate.InvoiceLineDto[i].Quantity {
@@ -539,14 +589,14 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 										return err, 0
 									}
 									if count == 0 {
-										return errors.New("could not update product1"), 0
+										return errors.New("could not update product7"), 0
 									}
 									err, count = invoiceLineService.Update(invoiceUpdate.UpdateInvoiceLine[b])
 									if err != nil {
 										return err, 0
 									}
 									if count == 0 {
-										return errors.New("could not update invoiceLine"), 0
+										return errors.New("could not update invoiceLine3"), 0
 									}
 								}
 
@@ -559,7 +609,7 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 									return err, 0
 								}
 								if count == 0 {
-									return errors.New("could not update item"), 0
+									return errors.New("3could not update item"), 0
 								}
 								product1 := productService.FindById(invoiceUpdate.UpdateInvoiceLine[b].ItemId)
 								quantityOnHand := product1.QuantityOnHand - invoiceUpdate.UpdateInvoiceLine[b].Quantity
@@ -570,14 +620,14 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 									return err, 0
 								}
 								if count == 0 {
-									return errors.New("could not update item1"), 0
+									return errors.New("4could not update item"), 0
 								}
 								err, count = invoiceLineService.Update(invoiceUpdate.UpdateInvoiceLine[b])
 								if err != nil {
 									return err, 0
 								}
 								if count == 0 {
-									return errors.New("could not update invoiceLine"), 0
+									return errors.New("could not update invoiceLine4"), 0
 								}
 
 							}
@@ -606,7 +656,7 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 					return err, 0
 				}
 				if count == 0 {
-					return errors.New("could not delete invoiceLine"), 0
+					return errors.New("could not delete invoiceLine2"), 0
 				}
 				product := productService.FindById(invoiceUpdate.InvoiceLineDto[a].ItemId)
 				product.QuantityOnHand = product.QuantityOnHand + invoiceUpdate.InvoiceLineDto[a].Quantity
@@ -615,7 +665,7 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 					return err, 0
 				}
 				if count == 0 {
-					return errors.New("could not update product1"), 0
+					return errors.New("could not update product8"), 0
 				}
 			}
 
@@ -627,21 +677,40 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 			return err, 0
 		}
 		if count == 0 {
-			return errors.New("could not update invoice"), 0
+			return errors.New("could not update invoice3"), 0
 		}
 		if updateCustomerId == invoiceUpdate.OriginalCustomer {
-			if saveMoney > 0 {
-				err, count = customerService.AddBalance(invoiceUpdate.OriginalCustomer, saveMoney)
-				return err, count
-			} else if loseMoney > 0 {
-				err, count = customerService.SubtractBalance(invoiceUpdate.OriginalCustomer, loseMoney)
-				return err, count
+			fmt.Println(invoiceUpdate.InvoiceTotal)
+			err, count = customerService.AddBalance(invoiceUpdate.OriginalCustomer, invoiceUpdate.InvoiceTotal)
+			if err != nil {
+				return err, 0
+			}
+			if count == 0 {
+				return errors.New("could not update customer to add balance"), 0
+			}
+			fmt.Println(totalPriceUpdated)
+			err, count = customerService.SubtractBalance(invoiceUpdate.OriginalCustomer, totalPriceUpdated)
+			if err != nil {
+				return err, 0
+			}
+			if count == 0 {
+				return errors.New("could not update customer to subtract balance"), 0
 			}
 		} else {
-			err, count = customerService.SubtractBalance(invoiceUpdate.UpdateCustomer, loseMoney)
-
+			err, count = customerService.SubtractBalance(invoiceUpdate.UpdateCustomer, totalPriceUpdated)
+			if err != nil {
+				return err, 0
+			}
+			if count == 0 {
+				return errors.New("could not update customer to subtract balance 2"), 0
+			}
 			err, count = customerService.AddBalance(invoiceUpdate.OriginalCustomer, invoiceUpdate.InvoiceTotal)
-			return err, count
+			if err != nil {
+				return err, 0
+			}
+			if count == 0 {
+				return errors.New("could not update customer to add balance 2"), 0
+			}
 
 		}
 		return nil, 1
@@ -653,8 +722,15 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 // only update and delete where lengths are equal
 func (p *InvoiceService) updateInvoiceEqualLength(invoiceUpdate InvoiceUpdate) (error, int64) {
 	updateCustomerId = 0
-	saveMoney = 0
-	loseMoney = 0
+	tax, err := strconv.ParseFloat(os.Getenv("TAX_RATE"), 64)
+	if err != nil {
+		return err, 0
+	}
+	addTax := 1 + tax/100
+	threshold, err := strconv.ParseFloat(os.Getenv("TAX_THRESHOLD"), 64)
+	if err != nil {
+		return err, 0
+	}
 	totalPriceUpdated = 0
 	customerService := InitCustomerApiReceiver.CustomerService
 	invoiceLineService := InitInvoiceLineServiceReceiver
@@ -671,6 +747,11 @@ func (p *InvoiceService) updateInvoiceEqualLength(invoiceUpdate InvoiceUpdate) (
 	for index, _ := range invoiceUpdate.UpdateInvoiceLine {
 		item := productService.FindById(invoiceUpdate.UpdateInvoiceLine[index].ItemId)
 		totalPriceUpdated += item.Price * invoiceUpdate.UpdateInvoiceLine[index].Quantity
+
+	}
+	if totalPriceUpdated > threshold {
+		totalPriceUpdated = totalPriceUpdated * addTax
+		totalPriceUpdated = math.Round(totalPriceUpdated*100) / 100
 	}
 	// check for customer update
 	if invoiceUpdate.UpdateCustomer != invoiceUpdate.OriginalCustomer {
@@ -685,9 +766,6 @@ func (p *InvoiceService) updateInvoiceEqualLength(invoiceUpdate InvoiceUpdate) (
 
 		if customer.Balance-totalPriceUpdated < 0 {
 			return errors.New("updated customer has not enough balance"), 0
-		} else {
-			loseMoney = totalPriceUpdated
-			loseMoney = math.Abs(loseMoney)
 		}
 	} else {
 		updateCustomerId = invoiceUpdate.OriginalCustomer
@@ -700,16 +778,10 @@ func (p *InvoiceService) updateInvoiceEqualLength(invoiceUpdate InvoiceUpdate) (
 		if count == 0 {
 			return errors.New("could not find data for old customer"), 0
 		}
-		if customerBalance+invoiceUpdate.InvoiceTotal-totalPriceUpdated < 0 {
+		if customerBalance-totalPriceUpdated < 0 {
 			return errors.New("customer did not have enough money"), 0
 		}
-		if invoiceUpdate.InvoiceTotal-totalPriceUpdated >= 0 {
-			saveMoney = invoiceUpdate.InvoiceTotal - totalPriceUpdated
 
-		} else {
-			loseMoney = invoiceUpdate.InvoiceTotal - totalPriceUpdated
-			loseMoney = math.Abs(loseMoney)
-		}
 	}
 	fmt.Println("inside equal")
 	// check for delete invoiceLines and update
@@ -722,7 +794,7 @@ func (p *InvoiceService) updateInvoiceEqualLength(invoiceUpdate InvoiceUpdate) (
 					return err, 0
 				}
 				if count == 0 {
-					return errors.New("could not delete invoiceLine"), 0
+					return errors.New("could not delete invoiceLine3"), 0
 				}
 				product := productService.FindById(invoiceUpdate.InvoiceLineDto[index].ItemId)
 				product.QuantityOnHand = product.QuantityOnHand + invoiceUpdate.InvoiceLineDto[index].Quantity
@@ -731,11 +803,11 @@ func (p *InvoiceService) updateInvoiceEqualLength(invoiceUpdate InvoiceUpdate) (
 					return err, 0
 				}
 				if count == 0 {
-					return errors.New("could not update product1"), 0
+					return errors.New("could not update product9"), 0
 				}
 				err = invoiceLineService.Create(invoiceUpdate.UpdateInvoiceLine[index])
 				if err != nil {
-					return errors.New("can not create new invoiceLine"), 0
+					return errors.New("can not create new invoiceLine3"), 0
 
 				}
 				product1 := productService.FindById(invoiceUpdate.UpdateInvoiceLine[index].ItemId)
@@ -745,7 +817,7 @@ func (p *InvoiceService) updateInvoiceEqualLength(invoiceUpdate InvoiceUpdate) (
 					return err, 0
 				}
 				if count == 0 {
-					return errors.New("could not update product"), 0
+					return errors.New("could not update product10"), 0
 				}
 			} else if !reflect.DeepEqual(invoiceUpdate.UpdateInvoiceLine[index], invoiceUpdate.InvoiceLineDto[index]) {
 
@@ -753,38 +825,38 @@ func (p *InvoiceService) updateInvoiceEqualLength(invoiceUpdate InvoiceUpdate) (
 
 					if invoiceUpdate.UpdateInvoiceLine[index].Quantity > invoiceUpdate.InvoiceLineDto[index].Quantity {
 						product := productService.FindById(invoiceUpdate.InvoiceLineDto[index].ItemId)
-						product.QuantityOnHand = product.QuantityOnHand - (invoiceUpdate.InvoiceLineDto[index].Quantity - invoiceUpdate.InvoiceLineDto[index].Quantity)
+						product.QuantityOnHand = product.QuantityOnHand - (invoiceUpdate.UpdateInvoiceLine[index].Quantity - invoiceUpdate.InvoiceLineDto[index].Quantity)
 						err, count := productService.Update(product)
 						if err != nil {
 							return err, 0
 						}
 						if count == 0 {
-							return errors.New("could not update product1"), 0
+							return errors.New("could not update product11"), 0
 						}
 						err, count = invoiceLineService.Update(invoiceUpdate.UpdateInvoiceLine[index])
 						if err != nil {
 							return err, 0
 						}
 						if count == 0 {
-							return errors.New("could not update invoiceLine"), 0
+							return errors.New("could not update invoiceLine6"), 0
 						}
 					}
 					if invoiceUpdate.UpdateInvoiceLine[index].Quantity < invoiceUpdate.InvoiceLineDto[index].Quantity {
 						product := productService.FindById(invoiceUpdate.InvoiceLineDto[index].ItemId)
-						product.QuantityOnHand = product.QuantityOnHand + (invoiceUpdate.InvoiceLineDto[index].Quantity - invoiceUpdate.InvoiceLineDto[index].Quantity)
+						product.QuantityOnHand = product.QuantityOnHand + (invoiceUpdate.InvoiceLineDto[index].Quantity - invoiceUpdate.UpdateInvoiceLine[index].Quantity)
 						err, count := productService.Update(product)
 						if err != nil {
 							return err, 0
 						}
 						if count == 0 {
-							return errors.New("could not update product1"), 0
+							return errors.New("could not update product12"), 0
 						}
 						err, count = invoiceLineService.Update(invoiceUpdate.UpdateInvoiceLine[index])
 						if err != nil {
 							return err, 0
 						}
 						if count == 0 {
-							return errors.New("could not update invoiceLine"), 0
+							return errors.New("could not update invoiceLine7"), 0
 						}
 					}
 
@@ -797,7 +869,7 @@ func (p *InvoiceService) updateInvoiceEqualLength(invoiceUpdate InvoiceUpdate) (
 						return err, 0
 					}
 					if count == 0 {
-						return errors.New("could not update item"), 0
+						return errors.New("5could not update item"), 0
 					}
 					product1 := productService.FindById(invoiceUpdate.UpdateInvoiceLine[index].ItemId)
 					quantityOnHand := product1.QuantityOnHand - invoiceUpdate.UpdateInvoiceLine[index].Quantity
@@ -808,14 +880,14 @@ func (p *InvoiceService) updateInvoiceEqualLength(invoiceUpdate InvoiceUpdate) (
 						return err, 0
 					}
 					if count == 0 {
-						return errors.New("could not update item1"), 0
+						return errors.New("6could not update item"), 0
 					}
 					err, count = invoiceLineService.Update(invoiceUpdate.UpdateInvoiceLine[index])
 					if err != nil {
 						return err, 0
 					}
 					if count == 0 {
-						return errors.New("could not update invoiceLine"), 0
+						return errors.New("could not update invoiceLine8"), 0
 					}
 
 				}
@@ -827,21 +899,41 @@ func (p *InvoiceService) updateInvoiceEqualLength(invoiceUpdate InvoiceUpdate) (
 			return err, 0
 		}
 		if count == 0 {
-			return errors.New("could not update invoice"), 0
+			return errors.New("could not update invoice10"), 0
 		}
 		if updateCustomerId == invoiceUpdate.OriginalCustomer {
-			if saveMoney > 0 {
-				err, count = customerService.AddBalance(invoiceUpdate.OriginalCustomer, saveMoney)
-				return err, count
-			} else if loseMoney > 0 {
-				err, count = customerService.SubtractBalance(invoiceUpdate.OriginalCustomer, loseMoney)
-				return err, count
-			}
-		} else {
-			err, count = customerService.SubtractBalance(invoiceUpdate.UpdateCustomer, loseMoney)
 
 			err, count = customerService.AddBalance(invoiceUpdate.OriginalCustomer, invoiceUpdate.InvoiceTotal)
-			return err, count
+			if err != nil {
+				return err, 0
+			}
+			if count == 0 {
+				return errors.New("could not update customer to add money2"), 0
+			}
+			err, count = customerService.SubtractBalance(invoiceUpdate.OriginalCustomer, totalPriceUpdated)
+			if err != nil {
+				return err, 0
+			}
+			if count == 0 {
+				return errors.New("could not update customer to subtract money2"), 0
+			}
+
+		} else {
+			err, count = customerService.SubtractBalance(invoiceUpdate.UpdateCustomer, totalPriceUpdated)
+			if err != nil {
+				return err, 0
+			}
+			if count == 0 {
+				return errors.New("could not update customer to subtract money 4"), 0
+			}
+			err, count = customerService.AddBalance(invoiceUpdate.OriginalCustomer, invoiceUpdate.InvoiceTotal)
+
+			if err != nil {
+				return err, 0
+			}
+			if count == 0 {
+				return errors.New("could not update customer to Add money 4"), 0
+			}
 
 		}
 

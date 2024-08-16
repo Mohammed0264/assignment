@@ -6,5 +6,5 @@ type CustomerDto struct {
 	LastName  string  `json:"last_name" validate:"required"`
 	Address   string  `json:"address" validate:"required"`
 	Phone     string  `json:"phone" validate:"required"`
-	Balance   float64 `json:"balance" validate:"required; gt=-1"`
+	Balance   float64 `json:"balance" validate:"required,gt=-1"`
 }

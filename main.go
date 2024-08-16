@@ -6,8 +6,10 @@ import (
 	"assignment/invoices"
 	"assignment/products"
 	"assignment/suppliers"
+	"assignment/users"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -15,7 +17,8 @@ import (
 func initDb() *gorm.DB {
 	dsn := "root:root@tcp(localhost:3306)/assignment?charset=utf8mb4&parseTime=True&loc=Local"
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	er := db.AutoMigrate(&customers.Customer{}, &suppliers.Supplier{}, &products.Product{}, &invoices.Invoice{}, &invoiceLines.InvoiceLine{})
+	er := db.AutoMigrate(&customers.Customer{}, &suppliers.Supplier{}, &products.Product{}, &invoices.Invoice{},
+		&invoiceLines.InvoiceLine{}, &users.User{})
 
 	if err != nil {
 		panic("failed to connect database")
@@ -32,6 +35,11 @@ func initDb() *gorm.DB {
 func main() {
 	db := initDb()
 	route := gin.Default()
+	err := godotenv.Load()
+	if err != nil {
+		fmt.Println("Error loading .env file")
+		return
+	}
 
 	// customer routes
 	customerAPI := customers.InitCustomerApi(db)
@@ -73,7 +81,14 @@ func main() {
 	route.DELETE("invoice/delete", invoiceApi.Delete)
 
 	//user Routes
-	err := route.Run("localhost:8080")
+	userRoutes := users.InitUserApi(db)
+	route.POST("user/create", userRoutes.Create)
+	route.PUT("user/updateUsername", userRoutes.UpdateUserName)
+	route.PUT("user/updatePassword", userRoutes.UpdatePassword)
+	route.GET("users", userRoutes.FindAll)
+	route.GET("user/:userName", userRoutes.FindByUserName)
+	route.DELETE("user/delete", userRoutes.Delete)
+	err = route.Run("localhost:8080")
 	if err != nil {
 		fmt.Println(err.Error())
 		return

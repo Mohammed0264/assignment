@@ -1,5 +1,7 @@
 package customers
 
+import "math"
+
 type CustomerService struct {
 	CustomerRepository CustomerRepository
 }
@@ -37,6 +39,7 @@ func (p *CustomerService) AddBalance(id uint, balance float64) (error, int64) {
 		return nil, 0
 	}
 	newBalance := find.Balance + balance
+	newBalance = math.Round(newBalance*100) / 100
 	return p.CustomerRepository.AddBalance(id, newBalance)
 }
 func (p *CustomerService) SubtractBalance(id uint, cost float64) (error, int64) {
@@ -48,6 +51,7 @@ func (p *CustomerService) SubtractBalance(id uint, cost float64) (error, int64) 
 		return nil, 0
 	}
 	newBalance := find.Balance - cost
+	newBalance = math.Round(newBalance*100) / 100
 	if newBalance < 0 {
 		return nil, 2
 	}
