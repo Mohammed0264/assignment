@@ -25,12 +25,31 @@ func (p *CustomerService) Update(customer Customer) (error, int64) {
 func (p *CustomerService) UpdateBalance(id uint, balance float64) (error, int64) {
 	return p.CustomerRepository.UpdateBalance(id, balance)
 }
-func (p *CustomerService) Delete(id uint) (error, int) {
+func (p *CustomerService) Delete(id uint) (error, int64) {
 	return p.CustomerRepository.Delete(id)
 }
 func (p *CustomerService) AddBalance(id uint, balance float64) (error, int64) {
-	return p.CustomerRepository.AddBalance(id, balance)
+	find, err, counter := p.CustomerRepository.Find(id)
+	if err != nil {
+		return err, 0
+	}
+	if counter == 0 {
+		return nil, 0
+	}
+	newBalance := find.Balance + balance
+	return p.CustomerRepository.AddBalance(id, newBalance)
 }
-func (p *CustomerService) SubtractBalance(id uint, balance float64) (error, int64) {
-	return p.CustomerRepository.SubtractBalance(id, balance)
+func (p *CustomerService) SubtractBalance(id uint, cost float64) (error, int64) {
+	find, err, counter := p.CustomerRepository.Find(id)
+	if err != nil {
+		return err, 0
+	}
+	if counter == 0 {
+		return nil, 0
+	}
+	newBalance := find.Balance - cost
+	if newBalance < 0 {
+		return nil, 2
+	}
+	return p.CustomerRepository.SubtractBalance(id, newBalance)
 }
