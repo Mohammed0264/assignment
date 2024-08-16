@@ -3,6 +3,8 @@ package suppliers
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
+	"github.com/microcosm-cc/bluemonday"
 	"net/http"
 )
 
@@ -16,6 +18,12 @@ func ProvideSupplierApi(p SupplierService) SupplierAPI {
 func (p *SupplierAPI) Create(c *gin.Context) {
 	var supplierDto SupplierDto
 	err := c.Bind(&supplierDto)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	supplierDto = sanitizeSupplier(supplierDto)
+	err = validateSupplier(supplierDto)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -37,7 +45,12 @@ func (p *SupplierAPI) Update(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
+	supplierDto = sanitizeSupplier(supplierDto)
+	err = validateSupplier(supplierDto)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	err, count := p.SupplierService.Update(ToSupplier(supplierDto))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -59,6 +72,7 @@ func (p *SupplierAPI) FindAll(c *gin.Context) {
 }
 func (p *SupplierAPI) FindByName(c *gin.Context) {
 	name := c.Param("name")
+	name = sanitizeName(name)
 	suppliers, err := p.SupplierService.FindByName(name)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -83,4 +97,23 @@ func (p *SupplierAPI) Delete(c *gin.Context) {
 		return
 	}
 	c.IndentedJSON(http.StatusOK, gin.H{"supplier deleted with id": fmt.Sprint(supplierDto.Id)})
+}
+func validateSupplier(supplierDto SupplierDto) error {
+	validate := validator.New()
+	err := validate.Struct(supplierDto)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func sanitizeSupplier(supplierDto SupplierDto) SupplierDto {
+	sanitize := bluemonday.StrictPolicy()
+	supplierDto.Name = sanitize.Sanitize(supplierDto.Name)
+	supplierDto.Phone = sanitize.Sanitize(supplierDto.Phone)
+	return supplierDto
+}
+func sanitizeName(name string) string {
+	sanitize := bluemonday.StrictPolicy()
+	name = sanitize.Sanitize(name)
+	return name
 }
