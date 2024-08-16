@@ -3,6 +3,8 @@ package customers
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
+	"github.com/microcosm-cc/bluemonday"
 	"net/http"
 	"strconv"
 )
@@ -22,6 +24,12 @@ func (p *CustomerApi) Create(c *gin.Context) {
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	customerDto = sanitizeInput(customerDto)
+	err = validateInput(customerDto)
+	if err != nil {
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	err = p.CustomerService.Create(ToCustomer(customerDto))
 	if err != nil {
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -33,6 +41,12 @@ func (p *CustomerApi) Update(c *gin.Context) {
 	err := c.Bind(&customerDto)
 	if err != nil {
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+	customerDto = sanitizeInput(customerDto)
+	err = validateInput(customerDto)
+	if err != nil {
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	err, count := p.CustomerService.Update(ToCustomer(customerDto))
 	if err != nil {
@@ -125,10 +139,7 @@ func (p *CustomerApi) SubtractBalance(c *gin.Context) {
 		c.IndentedJSON(http.StatusOK, gin.H{"failed": "customer with id:" + fmt.Sprintf("%v", customerDto.Id) + " does not exist"})
 		return
 	}
-	if count == 2 {
-		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "you do not have enough balance"})
-		return
-	}
+
 	c.IndentedJSON(http.StatusOK, gin.H{"success": "balance updated"})
 }
 func (p *CustomerApi) AddBalance(c *gin.Context) {
@@ -147,9 +158,18 @@ func (p *CustomerApi) AddBalance(c *gin.Context) {
 		c.IndentedJSON(http.StatusOK, gin.H{"failed": "customer with id:" + fmt.Sprintf("%v", customerDto.Id) + " does not exist"})
 		return
 	}
-	if count == 2 {
-		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "you do not have enough balance"})
-		return
-	}
+
 	c.IndentedJSON(http.StatusOK, gin.H{"success": "balance updated"})
+}
+func validateInput(customerDto CustomerDto) error {
+	validate := validator.New()
+	return validate.Struct(customerDto)
+}
+func sanitizeInput(customerDto CustomerDto) CustomerDto {
+	sanitize := bluemonday.StrictPolicy()
+	customerDto.Phone = sanitize.Sanitize(customerDto.Phone)
+	customerDto.FirstName = sanitize.Sanitize(customerDto.FirstName)
+	customerDto.LastName = sanitize.Sanitize(customerDto.LastName)
+	customerDto.Address = sanitize.Sanitize(customerDto.Address)
+	return customerDto
 }

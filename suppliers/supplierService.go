@@ -23,13 +23,7 @@ func (p *SupplierService) Create(supplier Supplier) error {
 	return p.SupplierRepository.Create(supplier)
 }
 func (p *SupplierService) Update(supplier Supplier) (error, int64) {
-	if strings.TrimSpace(supplier.Name) == "" {
-		return errors.New("name should not be empty"), 0
-	}
-	if strings.TrimSpace(supplier.Phone) == "" {
-		return errors.New("phone should not be empty"), 0
 
-	}
 	return p.SupplierRepository.Update(supplier)
 }
 func (p *SupplierService) FindAll() ([]Supplier, error) {
