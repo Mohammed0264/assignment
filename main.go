@@ -71,6 +71,8 @@ func main() {
 	route.PUT("invoice/update", invoiceApi.Update)
 	route.GET("invoices", invoiceApi.FindAll)
 	route.DELETE("invoice/delete", invoiceApi.Delete)
+
+	//user Routes
 	err := route.Run("localhost:8080")
 	if err != nil {
 		fmt.Println(err.Error())
