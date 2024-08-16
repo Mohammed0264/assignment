@@ -10,5 +10,5 @@ type Supplier struct {
 	Name      string             `gorm:"column:name; not null; default:Null  size:40"`
 	Phone     string             `gorm:"column:phone; not null;  size:30"`
 	DeletedAt gorm.DeletedAt     `gorm:"column:deleted_at; index"`
-	Product   []products.Product `gorm:"foreignKey:Supplier"`
+	Product   []products.Product `gorm:"foreignKey:Supplier; references:Id; "`
 }

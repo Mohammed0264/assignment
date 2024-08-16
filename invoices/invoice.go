@@ -12,6 +12,6 @@ type Invoice struct {
 	Customer        uint                       `gorm:"column:customer"`
 	InvoiceTotal    float64                    `gorm:"column:invoice_total"`
 	InvoiceDate     time.Time                  `gorm:"column:invoice_date; type:date;"`
-	InvoiceLine     []invoiceLines.InvoiceLine `gorm:"foreignKey:InvoiceId"`
+	InvoiceLine     []invoiceLines.InvoiceLine `gorm:"foreignKey:InvoiceId; references:Id"`
 	DeletedAt       gorm.DeletedAt             `gorm:"column:deleted_at;index"`
 }
