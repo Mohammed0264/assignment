@@ -100,11 +100,8 @@ func (p *SupplierAPI) Delete(c *gin.Context) {
 }
 func validateSupplier(supplierDto SupplierDto) error {
 	validate := validator.New()
-	err := validate.Struct(supplierDto)
-	if err != nil {
-		return err
-	}
-	return nil
+
+	return validate.Struct(supplierDto)
 }
 func sanitizeSupplier(supplierDto SupplierDto) SupplierDto {
 	sanitize := bluemonday.StrictPolicy()

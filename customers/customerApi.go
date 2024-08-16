@@ -139,6 +139,11 @@ func (p *CustomerApi) SubtractBalance(c *gin.Context) {
 		c.IndentedJSON(http.StatusOK, gin.H{"failed": "customer with id:" + fmt.Sprintf("%v", customerDto.Id) + " does not exist"})
 		return
 	}
+	if count == 2 {
+		c.IndentedJSON(http.StatusOK, gin.H{"failed": "customer with id:" + fmt.Sprintf("%v", customerDto.Id) +
+			" does not have enough balance"})
+		return
+	}
 
 	c.IndentedJSON(http.StatusOK, gin.H{"success": "balance updated"})
 }

@@ -91,11 +91,7 @@ func inputValidationForCreate(invoiceReceiver InvoiceReceiver) error {
 }
 func inputValidationForUpdate(invoiceUpdate InvoiceUpdate) error {
 	var validator = validator2.New()
-	err := validator.Struct(&invoiceUpdate)
-	if err != nil {
-		return err
-	}
-	return nil
+	return validator.Struct(&invoiceUpdate)
 }
 func inputSanitizationForCreate(invoiceReceiver InvoiceReceiver) InvoiceReceiver {
 	var sanitize = bluemonday.UGCPolicy()

@@ -152,9 +152,5 @@ func sanitizeInput(productDto ProductDto) ProductDto {
 }
 func validateInput(productDto ProductDto) error {
 	var validator = validator2.New()
-	err := validator.Struct(productDto)
-	if err != nil {
-		return err
-	}
-	return nil
+	return validator.Struct(productDto)
 }
