@@ -38,6 +38,7 @@ func (p *CustomerService) AddBalance(id uint, balance float64) (error, int64) {
 	if counter == 0 {
 		return nil, 0
 	}
+	// only include two numbers after pint like .00
 	newBalance := find.Balance + balance
 	newBalance = math.Round(newBalance*100) / 100
 	return p.CustomerRepository.AddBalance(id, newBalance)
@@ -50,6 +51,7 @@ func (p *CustomerService) SubtractBalance(id uint, cost float64) (error, int64) 
 	if counter == 0 {
 		return nil, 0
 	}
+	// only include two numbers after pint like .00
 	newBalance := find.Balance - cost
 	newBalance = math.Round(newBalance*100) / 100
 	if newBalance < 0 {

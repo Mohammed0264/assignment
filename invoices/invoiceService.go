@@ -14,6 +14,7 @@ import (
 	"time"
 )
 
+// inject dependencies in order to use other services that we need in that service
 var InitProductApiReceiver products.ProductApi
 var InitCustomerApiReceiver customers.CustomerApi
 var InitInvoiceLineServiceReceiver invoiceLines.InvoiceLineService
@@ -32,6 +33,7 @@ func (p *InvoiceService) Create(invoice Invoice, invoiceLineDto []invoiceLines.I
 	if err != nil {
 		return err
 	}
+	// change tax from 5% to 1.05
 	addTax := 1 + tax/100
 	threshold, err := strconv.ParseFloat(os.Getenv("TAX_THRESHOLD"), 64)
 	if err != nil {
@@ -47,8 +49,10 @@ func (p *InvoiceService) Create(invoice Invoice, invoiceLineDto []invoiceLines.I
 		return errors.New("customer not found")
 	}
 	productService := InitProductApiReceiver.ProductService
+	//create slice of product based on how many invoice line we have means we requested these products
 	var product = make([]products.Product, len(invoiceLineDto))
 	var totalPrice float64
+	//check available quantity
 	for index, value := range invoiceLineDto {
 		product[index] = productService.FindById(value.ItemId)
 		if product[index].QuantityOnHand-invoiceLineDto[index].Quantity < 0 {
@@ -57,10 +61,12 @@ func (p *InvoiceService) Create(invoice Invoice, invoiceLineDto []invoiceLines.I
 		invoiceLineDto[index].LinePrice = product[index].Price
 		totalPrice = totalPrice + (product[index].Price * invoiceLineDto[index].Quantity)
 	}
+	//check for add tax
 	if totalPrice > threshold {
 		totalPrice = totalPrice * addTax
 		totalPriceUpdated = math.Round(totalPriceUpdated*100) / 100
 	}
+	// check if customer have enough balance
 	if customer.Balance-totalPrice < 0 {
 		return errors.New(customer.FirstName + " " + customer.LastName + " does not have enough balance")
 	}
@@ -69,7 +75,7 @@ func (p *InvoiceService) Create(invoice Invoice, invoiceLineDto []invoiceLines.I
 	if retrieveLastInvoice.Id == 0 {
 		retrieveLastInvoice.InvoiceUniqueId = "0000-0000"
 	}
-
+	//get current year to create unique invoice id
 	time1 := time.Now()
 	year := time1.Year()
 
@@ -77,13 +83,15 @@ func (p *InvoiceService) Create(invoice Invoice, invoiceLineDto []invoiceLines.I
 	if err != nil {
 		return err
 	}
-
+	// we get last invoice and separate them into year and invoiceNumber
 	uniqueId, err := strconv.Atoi(strings.Split(retrieveLastInvoice.InvoiceUniqueId, "-")[1])
 	if err != nil {
 		return err
 	}
 
 	var newId string
+	//if current year greater than last year inserted invoice put invoiceNumber to 1
+	//else add 1 to invoice number
 	if year > lastYear {
 		uniqueId = 1
 		formatId := fmt.Sprintf("%04d", uniqueId)
@@ -120,6 +128,7 @@ func (p *InvoiceService) Create(invoice Invoice, invoiceLineDto []invoiceLines.I
 			}
 			return err
 		}
+		//update quantity on hand
 		product[index].QuantityOnHand = product[index].QuantityOnHand - value.Quantity
 		err, _ = productService.Update(product[index])
 		if err != nil {
@@ -127,6 +136,7 @@ func (p *InvoiceService) Create(invoice Invoice, invoiceLineDto []invoiceLines.I
 		}
 
 	}
+	//subtract the total price of invoice from customer
 	err, _ = InitCustomerApiReceiver.CustomerService.SubtractBalance(customer.Id, totalPrice)
 	if err != nil {
 		return err
@@ -134,11 +144,15 @@ func (p *InvoiceService) Create(invoice Invoice, invoiceLineDto []invoiceLines.I
 	return nil
 }
 func (p *InvoiceService) Update(invoiceUpdate InvoiceUpdate) (error, int64) {
-	// here update
+	// note for all methods it checks if the item is new which means UpdateInvoiceLine id=0 it will create new invoiceLine for it
+	// Note by default original and update they are equal in length which done in frontend please check InvoiceUpdate in invoiceDto.go
+	// original means InvoiceLineDto
+	//if original invoiceLine greater than update one means update invoice and delete and update invoiceLine
 	err, count := p.updateAndDeleteInvoice(invoiceUpdate)
 	if err != nil {
 		return err, 0
 	}
+	//if original invoiceLine less than update one means update invoice and create and update invoiceLine
 	if count == 4 {
 		err, count = p.updateAndCreateInvoice(invoiceUpdate)
 		if err != nil {
@@ -146,6 +160,7 @@ func (p *InvoiceService) Update(invoiceUpdate InvoiceUpdate) (error, int64) {
 		}
 	}
 	if count == 5 {
+		// if them length same for update
 		err, _ = p.updateInvoiceEqualLength(invoiceUpdate)
 		if err != nil {
 			return err, 0
@@ -162,6 +177,7 @@ func (p *InvoiceService) FindAll() []InvoiceSender {
 	invoiceLineService := InitInvoiceLineServiceReceiver
 	customerService := InitCustomerApiReceiver
 	productService := InitProductApiReceiver
+	//retrieve invoices with invoiceLines that relate to it
 	for index, _ := range invoices {
 		invoiceLine := invoiceLines.ToInvoiceDTOs(invoiceLineService.FindByInvoiceId(invoices[index].Id))
 		customer, _, _ := customerService.CustomerService.GetCustomerById(invoices[index].Customer)
@@ -171,6 +187,7 @@ func (p *InvoiceService) FindAll() []InvoiceSender {
 		invoiceSender[index].CustomerName = customer.FirstName + " " + customer.LastName
 		invoiceSender[index].InvoiceDate = invoices[index].InvoiceDate
 		invoiceSender[index].InvoiceTotal = invoices[index].InvoiceTotal
+		// retrieve invoiceLines
 		for index2, _ := range invoiceLine {
 			product := productService.ProductService.FindById(invoiceLine[index2].ItemId)
 			invoiceLine[index2].ItemName = product.Name
@@ -181,6 +198,8 @@ func (p *InvoiceService) FindAll() []InvoiceSender {
 
 	return invoiceSender
 }
+
+// FindByInvoiceUniqueId future implement it
 func (p *InvoiceService) FindByInvoiceUniqueId(invoiceUniqueId string) (Invoice, error) {
 	return p.InvoiceRepository.FindByInvoiceUniqueId(invoiceUniqueId)
 }
@@ -188,6 +207,7 @@ func (p *InvoiceService) Delete(invoiceId uint) (error, int64) {
 	invoiceLine := InitInvoiceLineServiceReceiver
 	product := InitProductApiReceiver.ProductService
 	customer := InitCustomerApiReceiver.CustomerService
+	// we retrieve invoiceLines that relate to the invoice
 	invoiceLinesReceived := invoiceLine.FindByInvoiceId(invoiceId)
 	invoice, err := p.InvoiceRepository.FindById(invoiceId)
 	if err != nil {
@@ -198,6 +218,7 @@ func (p *InvoiceService) Delete(invoiceId uint) (error, int64) {
 	}
 	customerId := invoice.Customer
 	counter := 1
+	//send back quantity to products and delete invoiceLine
 	for index, _ := range invoiceLinesReceived {
 		updateProduct := product.FindById(invoiceLinesReceived[index].ItemId)
 		updateProduct.QuantityOnHand += invoiceLinesReceived[index].Quantity
@@ -219,6 +240,7 @@ func (p *InvoiceService) Delete(invoiceId uint) (error, int64) {
 
 		counter++
 	}
+	//return spent money to customer
 	err, count := customer.AddBalance(customerId, invoice.InvoiceTotal)
 	if err != nil {
 		return err, 0
@@ -226,6 +248,7 @@ func (p *InvoiceService) Delete(invoiceId uint) (error, int64) {
 	if count == 0 {
 		return errors.New("error on " + fmt.Sprint(counter) + " try of add balance"), 0
 	}
+	//delete invoice
 	err, count = p.InvoiceRepository.Delete(invoiceId)
 	if err != nil {
 		return err, 0
@@ -298,14 +321,11 @@ func (p *InvoiceService) updateAndDeleteInvoice(invoiceUpdate InvoiceUpdate) (er
 
 	notifier := 0
 	counter := 0
-	// check for delete invoiceLines and create
 	if len(invoiceUpdate.UpdateInvoiceLine) < len(invoiceUpdate.InvoiceLineDto) {
 		var resizeInvoiceLineDto []invoiceLines.InvoiceLineDto
 		// check for create
 		for i := 0; i < len(invoiceUpdate.UpdateInvoiceLine); i++ {
-			fmt.Println("insdie loop of create")
 			if invoiceUpdate.UpdateInvoiceLine[i].Id == 0 {
-				fmt.Println("inside create")
 				err := invoiceLineService.Create(invoiceUpdate.UpdateInvoiceLine[i])
 				if err != nil {
 					return errors.New("can not create new invoiceLine1"), 0
@@ -562,6 +582,7 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 				for i := 0; i < len(invoiceUpdate.InvoiceLineDto); i++ {
 					if invoiceUpdate.UpdateInvoiceLine[b].Id == invoiceUpdate.InvoiceLineDto[i].Id {
 						if !reflect.DeepEqual(invoiceUpdate.InvoiceLineDto[i], invoiceUpdate.UpdateInvoiceLine) {
+							// if item id is equal then only quantity updated if not means return back quantity to previous product get quanity form new product
 							if invoiceUpdate.UpdateInvoiceLine[b].ItemId == invoiceUpdate.InvoiceLineDto[i].ItemId {
 								if invoiceUpdate.UpdateInvoiceLine[b].Quantity > invoiceUpdate.InvoiceLineDto[i].Quantity {
 									product := productService.FindById(invoiceUpdate.InvoiceLineDto[b].ItemId)
@@ -719,7 +740,7 @@ func (p *InvoiceService) updateAndCreateInvoice(invoiceUpdate InvoiceUpdate) (er
 	return nil, 5
 }
 
-// only update and delete where lengths are equal
+// update and delete where lengths are equal
 func (p *InvoiceService) updateInvoiceEqualLength(invoiceUpdate InvoiceUpdate) (error, int64) {
 	updateCustomerId = 0
 	tax, err := strconv.ParseFloat(os.Getenv("TAX_RATE"), 64)

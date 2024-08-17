@@ -1,2 +1,0 @@
-alter table products add constraint fk_supplier
- foreign key (supplier) references suppliers(id)

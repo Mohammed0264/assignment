@@ -30,5 +30,3 @@ func (p *InvoiceLineService) Delete(id uint) (error, int64) {
 	err, count := p.InvoiceLineRepository.Delete(id)
 	return err, count
 }
-
-// add validation and sanitize

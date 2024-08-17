@@ -47,11 +47,11 @@ func (p *ProductService) UpdateImage(id uint, image *multipart.FileHeader, origi
 
 	file := filepath.Join("./images/", imageName)
 	counter := 0
-
+	//check if uploaded image exist
 	for {
 		_, err := os.Stat(file)
 		if err == nil {
-
+			// if exist update it is name and continue checking until become unique
 			file = filepath.Join("./images/", strconv.Itoa(counter)+imageName)
 			counter++
 			continue
@@ -64,6 +64,7 @@ func (p *ProductService) UpdateImage(id uint, image *multipart.FileHeader, origi
 	if err != nil {
 		return err, 0, ""
 	} else {
+		//after update success remove old image
 		err = removeOriginalImage(originalImage)
 		if err != nil {
 			return err, 0, ""
@@ -72,6 +73,7 @@ func (p *ProductService) UpdateImage(id uint, image *multipart.FileHeader, origi
 	}
 }
 
+// we check file extension only limited extension have access
 func checkFileExtension(extension string) bool {
 	validExtension := []string{".jpg", ".png", ".jpeg"}
 	for _, value := range validExtension {
@@ -81,6 +83,8 @@ func checkFileExtension(extension string) bool {
 	}
 	return false
 }
+
+// remove old image of product
 func removeOriginalImage(image string) error {
 	if image != "Null1" {
 		_, err := os.Stat(image)

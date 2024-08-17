@@ -19,6 +19,9 @@ func (p *UserService) UpdatePassword(user User) (error, int64) {
 func (p *UserService) FindByUserName(userName string) []User {
 	return p.UserRepository.FindByUserName(userName)
 }
+func (p *UserService) FindUserNameLogin(userName string) User {
+	return p.UserRepository.FindUserNameLogin(userName)
+}
 func (p *UserService) FindAll() []User {
 	return p.UserRepository.FindAll()
 }

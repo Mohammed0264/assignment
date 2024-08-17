@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// InvoiceDto transform data to type invoice
 type InvoiceDto struct {
 	Id              uint      `json:"id"`
 	InvoiceUniqueId string    `json:"uniqueInvoiceId"`
@@ -13,6 +14,7 @@ type InvoiceDto struct {
 	InvoiceTotal    float64   `json:"invoiceTotal"`
 }
 
+// InvoiceReceiver use it when you want creat invoice
 type InvoiceReceiver struct {
 	Id              uint                          `json:"id"`
 	InvoiceUniqueId string                        `json:"uniqueInvoiceId"`
@@ -21,6 +23,8 @@ type InvoiceReceiver struct {
 	InvoiceTotal    float64                       `json:"invoiceTotal"`
 	InvoiceLine     []invoiceLines.InvoiceLineDto `json:"line"`
 }
+
+// InvoiceSender use it when you wants to send data
 type InvoiceSender struct {
 	Id              uint                          `json:"id"`
 	InvoiceUniqueId string                        `json:"uniqueInvoiceId"`
@@ -30,6 +34,8 @@ type InvoiceSender struct {
 	InvoiceTotal    float64                       `json:"invoiceTotal"`
 	InvoiceLineDto  []invoiceLines.InvoiceLineDto `json:"invoiceLine"`
 }
+
+// InvoiceUpdate used it when you want to update invoice
 type InvoiceUpdate struct {
 	Id                uint                          `json:"id" validate:"required"`
 	InvoiceUniqueId   string                        `json:"uniqueInvoiceId" validate:"required"`

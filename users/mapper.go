@@ -1,7 +1,7 @@
 package users
 
 func ToUser(userDto UserDto) User {
-	return User{UserName: userDto.UserName, Password: userDto.Password}
+	return User{Id: userDto.Id, UserName: userDto.UserName, Password: userDto.Password}
 }
 func ToUserDto(user User) UserDto {
 	return UserDto{Id: user.Id, UserName: user.UserName}

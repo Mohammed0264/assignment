@@ -1,6 +1,8 @@
 package users
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+)
 
 type UserRepository struct {
 	Db *gorm.DB
@@ -26,6 +28,11 @@ func (p *UserRepository) FindByUserName(userName string) []User {
 	var users []User
 	p.Db.Model(&User{}).Where("user_name LIKE ?", "%"+userName+"%").Find(&users)
 	return users
+}
+func (p *UserRepository) FindUserNameLogin(userName string) User {
+	var user User
+	p.Db.Model(&User{}).Where("user_name LIKE ?", "%"+userName+"%").Find(&user)
+	return user
 }
 func (p *UserRepository) FindAll() []User {
 	var users []User
