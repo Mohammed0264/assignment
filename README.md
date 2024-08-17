@@ -4,8 +4,9 @@
 1. clone the project
 2. run mysql file or there is file db.txt open it then run only line one and line tow
 3. if you did not run mysql file also do this step after runing first two lines run the project it creates tables for you then run last line of db.txt file
-4. open project there is file .env update DB_USER to you mysql user  update DB_PASSWORD to user password update DB_NAME if you changes database name
-5. if there is error with loadin packages there is file package.txt include all package commands to download
+4. if you run db.sql it creates two users one is admin and one is user 
+5. open project there is file .env update DB_USER to you mysql user  update DB_PASSWORD to user password update DB_NAME if you changes database name
+6. if there is error with loadin packages there is file package.txt include all package commands to download
 
 
 ## Security
